@@ -3,7 +3,7 @@
 
 A boid model is visualized by using matplotlib as shown above.
 
-`boid.py` and part of `model.py` are from [here](https://github.com/projectmesa/mesa/tree/master/examples/boid-flockers/boid_flockers).
+`boid.py` and part of `model.py` are from [here](https://github.com/projectmesa/mesa/tree/master/examples/boid_flockers/boid_flockers).
 
 ## Requirement
 - mesa
