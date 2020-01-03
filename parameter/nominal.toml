@@ -1,6 +1,6 @@
 [global]
 description = "ノミナルケース"
-max_timestep = 250
+max_timestep = 50
 
 [visualization]
 interval = 0
