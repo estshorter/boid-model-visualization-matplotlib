@@ -66,7 +66,7 @@ class FuncAnimationOnce(FuncAnimation):
     def _step(self, *args):
         still_going = Animation._step(self, *args)
         if not still_going:
-            # If self._post_func is plt.close, retuning False raises an exception
+            # If self._post_func iincludes plt.close, retuning False raises an exception
             # So, belows are workaround
             self.event_source.remove_callback(self._step)
             self._post_func()
@@ -81,7 +81,7 @@ class ModelRunner:
         self.params = params
         ModelRunner.initialize_root_logger(params["global"]["description"])
 
-    def update(self, iter: int, max_timestep: int, pbar: tqdm) -> None:
+    def update(self, iter: int, pbar: tqdm) -> None:
         self.model.step()
         self.model.draw_succesive()
         pbar.update(1)
@@ -94,7 +94,7 @@ class ModelRunner:
             ani = FuncAnimationOnce(
                 self.model.fig,
                 self.update,
-                fargs=(max_timestep, pbar),
+                fargs=(pbar,),
                 interval=self.interval,
                 frames=max_timestep,
                 post_func=plt.close,
