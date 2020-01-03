@@ -1,16 +1,17 @@
 import contextlib
 import datetime
-import time
 import logging
 from logging.handlers import MemoryHandler
-import sys
-from typing import Callable
 from pathlib import Path
+import sys
+import time
+from typing import Any, Callable, Iterator
 
-from tqdm import tqdm
-import toml
 import matplotlib.animation as anm
 import matplotlib.pyplot as plt
+from mesa import Model
+import toml
+from tqdm import tqdm
 
 
 from TqdmLoggingHandler import TqdmLoggingHandler
@@ -18,7 +19,7 @@ from TqdmLoggingHandler import TqdmLoggingHandler
 logger = logging.getLogger(__name__)
 
 
-def make_parent_dir(filename):
+def make_parent_dir(filename: str) -> None:
     parent = Path(filename).parent
     if not parent.exists():
         parent.mkdir()
@@ -30,54 +31,61 @@ def decorate_print(
     string: str,
     char_deco: str = "=",
     len_deco: int = 35,
-) -> None:
+) -> Iterator[None]:
     print_func(f" {string} ".center(len_deco, char_deco))
     yield
     print_func(char_deco * len_deco)
 
 
 class ModelRunner:
-    def __init__(self, model, param_path):
+    def __init__(self, model: Model, param_path: str) -> None:
         params = toml.load(param_path)
         self.model = model(**params["model"])
         self.params = params
         ModelRunner.initialize_root_logger(params["global"]["description"])
 
-    def update(self, iter, max_timestep):
+    def update(self, iter: int, max_timestep: int, pbar: tqdm) -> None:
         self.model.step()
         self.model.draw_succesive()
-        self.bar.update(1)
+        pbar.update(1)
         if iter >= max_timestep - 1:
             plt.close()
 
-    def run(self, callback):
+    def run(self, callback: Callable[[anm.FuncAnimation], Any]) -> None:
         max_timestep = self.params["global"]["max_timestep"]
-        self.bar = tqdm(total=max_timestep)
         start = time.monotonic()
-
         self.model.draw_initial()
-        ani = anm.FuncAnimation(
-            self.model.fig,
-            self.update,
-            fargs=(max_timestep,),
-            interval=self.params["global"]["interval"],
-            frames=max_timestep,
-            repeat=False,
-        )
-        callback(ani)
-        self.bar.close()
-        elapsed = time.monotonic() - start
+        with tqdm(total=max_timestep) as pbar:
+            ani = anm.FuncAnimation(
+                self.model.fig,
+                self.update,
+                fargs=(max_timestep, pbar),
+                interval=self.interval,
+                frames=max_timestep,
+                repeat=False,
+            )
+            callback(ani)
         with decorate_print(logging.info, "Final Results"):
-            ModelRunner.log_elapsed_time(elapsed)
+            ModelRunner.log_elapsed_time(time.monotonic() - start)
 
-    def visualize(self):
+    def run_silent(self) -> None:
+        def consume_iter_gen(anm: anm.FuncAnimation) -> None:
+            for step in anm._iter_gen():
+                anm._func(step, *anm._args)
+
+        self.interval = 0
+        self.run(consume_iter_gen)
+
+    def visualize(self) -> None:
+        self.interval = self.params["visualization"]["interval"]
         self.run(lambda ani: plt.show())
 
-    def save(self, filename, writer):
+    def save(self, filename: str, writer: str = "ffmpeg") -> None:
         make_parent_dir(filename)
+        self.interval = self.params["movie"]["interval"]
         self.run(
             lambda ani: ani.save(
-                filename, writer=writer, dpi=self.params["global"]["dpi"]
+                filename, writer=writer, dpi=self.params["movie"]["dpi"]
             )
         )
 
@@ -115,7 +123,7 @@ class ModelRunner:
         logging.debug(f"Args: {sys.argv}")
 
     @staticmethod
-    def log_elapsed_time(elapsed_sec: int) -> None:
+    def log_elapsed_time(elapsed_sec: float) -> None:
         m, s = divmod(elapsed_sec, 60)
         h, m = divmod(m, 60)
         logging.info(f"Elapsed time: {int(h):02d}:{int(m):02d}:{s:.1f}")
