@@ -1,6 +1,6 @@
 [global]
 description = "ノミナルケース"
-max_timestep = 50
+max_timestep = 200
 
 [visualization]
 interval = 0
@@ -10,7 +10,7 @@ dpi = 200
 interval = 50
 
 [model]
-population = 20
+population = 30
 width = 100
 height = 100
 speed = 1

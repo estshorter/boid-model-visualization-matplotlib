@@ -13,7 +13,6 @@ from mesa import Model
 import toml
 from tqdm import tqdm
 
-
 from TqdmLoggingHandler import TqdmLoggingHandler
 
 logger = logging.getLogger(__name__)
@@ -37,7 +36,7 @@ def decorate_print(
     print_func(char_deco * len_deco)
 
 
-class FuncAnimationOnce(FuncAnimation):
+class FuncAnimationWithEndFunc(FuncAnimation):
     def __init__(
         self,
         fig,
@@ -47,7 +46,7 @@ class FuncAnimationOnce(FuncAnimation):
         fargs=None,
         save_count=None,
         *,
-        post_func,
+        end_func,
         cache_frame_data=True,
         **kwargs,
     ):
@@ -61,16 +60,15 @@ class FuncAnimationOnce(FuncAnimation):
             cache_frame_data=cache_frame_data,
             **kwargs,
         )
-        self._post_func = post_func
+        self._end_func = end_func
 
     def _step(self, *args):
         still_going = Animation._step(self, *args)
         if not still_going:
-            # If self._post_func iincludes plt.close, retuning False raises an exception
+            # If self._end_func includes plt.close, returning False raises an exception
             # So, belows are workaround
             self.event_source.remove_callback(self._step)
-            self._post_func()
-
+            self._end_func()
         return True
 
 
@@ -79,7 +77,9 @@ class ModelRunner:
         params = toml.load(param_path)
         self.model = model(**params["model"])
         self.params = params
-        ModelRunner.initialize_root_logger(params["global"]["description"])
+        pglo = params["global"]
+        ModelRunner.initialize_root_logger(pglo["description"])
+        self.max_timestep = pglo["max_timestep"]
 
     def update(self, iter: int, pbar: tqdm) -> None:
         self.model.step()
@@ -87,19 +87,18 @@ class ModelRunner:
         pbar.update(1)
 
     def run(self, callback: Callable[[FuncAnimation], Any]) -> None:
-        max_timestep = self.params["global"]["max_timestep"]
         start = time.monotonic()
         self.model.draw_initial()
-        with tqdm(total=max_timestep) as pbar:
-            ani = FuncAnimationOnce(
+        with tqdm(total=self.max_timestep) as pbar:
+            fanm = FuncAnimationWithEndFunc(
                 self.model.fig,
                 self.update,
                 fargs=(pbar,),
                 interval=self.interval,
-                frames=max_timestep,
-                post_func=plt.close,
+                frames=self.max_timestep - 1,
+                end_func=plt.close,
             )
-            callback(ani)
+            callback(fanm)
         with decorate_print(logging.info, "Final Results"):
             ModelRunner.log_elapsed_time(time.monotonic() - start)
 
@@ -112,46 +111,40 @@ class ModelRunner:
         self.run(consume_iter_gen)
 
     def run_silent(self) -> None:
-        for step in range(self.params["global"]["max_timestep"]):
+        for step in range(self.max_timestep):
             self.model.step()
-        with decorate_print(logging.info, "Final Results"):
-            logging.info("End silent run")
 
     def visualize(self) -> None:
         self.interval = self.params["visualization"]["interval"]
-        self.run(lambda ani: plt.show())
+        self.run(lambda fanm: plt.show())
 
     def save(self, filename: str, writer: str = "ffmpeg") -> None:
         make_parent_dir(filename)
-        self.interval = self.params["movie"]["interval"]
-        self.run(
-            lambda ani: ani.save(
-                filename, writer=writer, dpi=self.params["movie"]["dpi"]
-            )
-        )
+        pmovie = self.params["movie"]
+        self.interval = pmovie["interval"]
+        self.run(lambda fanm: fanm.save(filename, writer, dpi=pmovie["dpi"]))
 
     @staticmethod
     def initialize_root_logger(desc: str) -> None:
         # add TqdmLoggingHandler and MemoryHandler targeting FileHandler
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
-        logging.getLogger("matplotlib").setLevel(logging.CRITICAL)
+        logging.getLogger("matplotlib").setLevel(logging.ERROR)
 
-        formatter_tqdm = logging.Formatter("{message}", style="{")
         tqdm_handler = TqdmLoggingHandler(level=logging.INFO)
-        tqdm_handler.setFormatter(formatter_tqdm)
+        tqdm_handler.setFormatter(logging.Formatter("{message}", style="{"))
         logger.addHandler(tqdm_handler)
 
         dt_now = datetime.datetime.now()
-        dt_now_str = dt_now.strftime("%Y%m%d_%H%M%S")
-        filename = f"./log/{dt_now_str}_{desc}.log"
+        filename = f"./log/{dt_now.strftime('%Y%m%d_%H%M%S')}_{desc}.log"
         make_parent_dir(filename)
         # encodingを指定しないと、Windowsではshift-jisで出力される
         # delay=Trueを指定し、初書込み時にファイルを作成するようにする
         file_handler = logging.FileHandler(filename, encoding="utf-8", delay=True)
         file_handler.setLevel(logging.DEBUG)
-        formatter_file = logging.Formatter("{levelname:<5}| {message}", style="{")
-        file_handler.setFormatter(formatter_file)
+        file_handler.setFormatter(
+            logging.Formatter("{levelname:<5}| {message}", style="{")
+        )
         # いちいちファイルに書き込むと遅いのでMemoryHandlerを使う
         # logging.info(), logging.debug()などを呼んだ回数がcapacityを上回った場合、targetに出力される
         # flushLevelは高めに設定
