@@ -7,7 +7,7 @@ import sys
 import time
 from typing import Any, Callable, Iterator
 
-import matplotlib.animation as anm
+from matplotlib.animation import Animation, FuncAnimation
 import matplotlib.pyplot as plt
 from mesa import Model
 import toml
@@ -37,6 +37,43 @@ def decorate_print(
     print_func(char_deco * len_deco)
 
 
+class FuncAnimationOnce(FuncAnimation):
+    def __init__(
+        self,
+        fig,
+        func,
+        frames=None,
+        init_func=None,
+        fargs=None,
+        save_count=None,
+        *,
+        post_func,
+        cache_frame_data=True,
+        **kwargs,
+    ):
+        super().__init__(
+            fig,
+            func,
+            frames,
+            init_func,
+            fargs,
+            save_count,
+            cache_frame_data=cache_frame_data,
+            **kwargs,
+        )
+        self._post_func = post_func
+
+    def _step(self, *args):
+        still_going = Animation._step(self, *args)
+        if not still_going:
+            # If self._post_func is plt.close, retuning False raises an exception
+            # So, belows are workaround
+            self.event_source.remove_callback(self._step)
+            self._post_func()
+
+        return True
+
+
 class ModelRunner:
     def __init__(self, model: Model, param_path: str) -> None:
         params = toml.load(param_path)
@@ -48,33 +85,37 @@ class ModelRunner:
         self.model.step()
         self.model.draw_succesive()
         pbar.update(1)
-        if iter >= max_timestep - 1:
-            plt.close()
 
-    def run(self, callback: Callable[[anm.FuncAnimation], Any]) -> None:
+    def run(self, callback: Callable[[FuncAnimation], Any]) -> None:
         max_timestep = self.params["global"]["max_timestep"]
         start = time.monotonic()
         self.model.draw_initial()
         with tqdm(total=max_timestep) as pbar:
-            ani = anm.FuncAnimation(
+            ani = FuncAnimationOnce(
                 self.model.fig,
                 self.update,
                 fargs=(max_timestep, pbar),
                 interval=self.interval,
                 frames=max_timestep,
-                repeat=False,
+                post_func=plt.close,
             )
             callback(ani)
         with decorate_print(logging.info, "Final Results"):
             ModelRunner.log_elapsed_time(time.monotonic() - start)
 
-    def run_silent(self) -> None:
-        def consume_iter_gen(anm: anm.FuncAnimation) -> None:
-            for step in anm._iter_gen():
-                anm._func(step, *anm._args)
+    def run_headless(self) -> None:
+        def consume_iter_gen(fanm: FuncAnimation) -> None:
+            for step in fanm._iter_gen():
+                fanm._func(step, *fanm._args)
 
         self.interval = 0
         self.run(consume_iter_gen)
+
+    def run_silent(self) -> None:
+        for step in range(self.params["global"]["max_timestep"]):
+            self.model.step()
+        with decorate_print(logging.info, "Final Results"):
+            logging.info("End silent run")
 
     def visualize(self) -> None:
         self.interval = self.params["visualization"]["interval"]
