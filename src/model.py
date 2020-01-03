@@ -23,16 +23,16 @@ class BoidFlockers(Model):
 
     def __init__(
         self,
-        population=100,
-        width=100,
-        height=100,
-        speed=1,
-        vision=10,
-        separation=2,
-        cohere=0.025,
-        separate=0.25,
-        match=0.04,
-    ):
+        population: int = 100,
+        width: int = 100,
+        height: int = 100,
+        speed: float = 1,
+        vision: float = 10,
+        separation: float = 2,
+        cohere: float = 0.025,
+        separate: float = 0.25,
+        match: float = 0.04,
+    ) -> None:
         """
         Create a new Flockers model.
 
@@ -64,7 +64,7 @@ class BoidFlockers(Model):
         self.make_agents()
         self.running = True
 
-    def make_agents(self):
+    def make_agents(self) -> None:
         """
         Create self.population agents, with random positions and starting headings.
         """
@@ -86,10 +86,10 @@ class BoidFlockers(Model):
             self.space.place_agent(boid, pos)
             self.schedule.add(boid)
 
-    def step(self):
+    def step(self) -> None:
         self.schedule.step()
 
-    def draw_initial(self):
+    def draw_initial(self) -> None:
         self.fig, self.ax = plt.subplots()
         ax = self.ax
         self.text = ax.set_title(f"t={self.schedule.time:03d}")
@@ -117,7 +117,7 @@ class BoidFlockers(Model):
         ax.set_ylim(0, self.height)
         ax.set_aspect("equal")
 
-    def draw_succesive(self):
+    def draw_succesive(self) -> None:
         self.text.set_text(f"t={self.schedule.time:03d}")
         for agent in self.schedule.agents:
             self.agent_pos_lst[agent.unique_id].set_offsets(agent.pos)
