@@ -24,6 +24,48 @@ def make_parent_dir(filename: str) -> None:
         parent.mkdir()
 
 
+def initialize_root_logger(desc: str) -> None:
+    # add TqdmLoggingHandler and MemoryHandler targeting FileHandler
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    logging.getLogger("matplotlib").setLevel(logging.ERROR)
+
+    tqdm_handler = TqdmLoggingHandler(level=logging.INFO)
+    tqdm_handler.setFormatter(logging.Formatter("{message}", style="{"))
+    logger.addHandler(tqdm_handler)
+
+    dt_now = datetime.datetime.now()
+    filename = f"./log/{dt_now.strftime('%Y%m%d_%H%M%S')}_{desc}.log"
+    make_parent_dir(filename)
+    # encodingを指定しないと、Windowsではshift-jisで出力される
+    # delay=Trueを指定し、初書込み時にファイルを作成するようにする
+    file_handler = logging.FileHandler(filename, encoding="utf-8", delay=True)
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging.Formatter("{levelname:<5}| {message}", style="{"))
+    # いちいちファイルに書き込むと遅いのでMemoryHandlerを使う
+    # logger.info(), logger.debug()などを呼んだ回数がcapacityを上回った場合、targetに出力される
+    # flushLevelは高めに設定
+    memory_handler = MemoryHandler(
+        capacity=100, flushLevel=logging.ERROR, target=file_handler
+    )
+    logger.addHandler(memory_handler)
+
+    logger.info(f"{desc} @ {dt_now.strftime('%Y/%m/%d %H:%M:%S')}")
+    logger.debug(f"Args: {sys.argv}")
+
+
+def log_elapsed_time(elapsed_sec: float) -> None:
+    m, s = divmod(elapsed_sec, 60)
+    h, m = divmod(m, 60)
+    logger.info(f"Elapsed time: {int(h):02d}:{int(m):02d}:{s:.1f}")
+
+
+def log_parameters(params) -> None:
+    with decorate_print(logger.debug, "Parameter"):
+        for line in toml.dumps(params).splitlines():
+            logger.debug(line)
+
+
 @contextlib.contextmanager
 def decorate_print(
     print_func: Callable[[str], None],
@@ -78,7 +120,7 @@ class ModelRunner:
         self.model = model(**params["model"])
         self.params = params
         pglo = params["global"]
-        ModelRunner.initialize_root_logger(pglo["description"])
+        initialize_root_logger(pglo["description"])
         self.max_timestep = pglo["max_timestep"]
 
     def update(self, iter: int, pbar: tqdm) -> None:
@@ -99,8 +141,9 @@ class ModelRunner:
                 end_func=plt.close,
             )
             callback(fanm)
-        with decorate_print(logging.info, "Final Results"):
-            ModelRunner.log_elapsed_time(time.monotonic() - start)
+        with decorate_print(logger.info, "Final Results"):
+            log_elapsed_time(time.monotonic() - start)
+        log_parameters(self.params)
 
     def run_headless(self) -> None:
         def consume_iter_gen(fanm: FuncAnimation) -> None:
@@ -124,49 +167,6 @@ class ModelRunner:
         self.interval = pmovie["interval"]
         self.run(lambda fanm: fanm.save(filename, writer, dpi=pmovie["dpi"]))
 
-    @staticmethod
-    def initialize_root_logger(desc: str) -> None:
-        # add TqdmLoggingHandler and MemoryHandler targeting FileHandler
-        logger = logging.getLogger()
-        logger.setLevel(logging.DEBUG)
-        logging.getLogger("matplotlib").setLevel(logging.ERROR)
-
-        tqdm_handler = TqdmLoggingHandler(level=logging.INFO)
-        tqdm_handler.setFormatter(logging.Formatter("{message}", style="{"))
-        logger.addHandler(tqdm_handler)
-
-        dt_now = datetime.datetime.now()
-        filename = f"./log/{dt_now.strftime('%Y%m%d_%H%M%S')}_{desc}.log"
-        make_parent_dir(filename)
-        # encodingを指定しないと、Windowsではshift-jisで出力される
-        # delay=Trueを指定し、初書込み時にファイルを作成するようにする
-        file_handler = logging.FileHandler(filename, encoding="utf-8", delay=True)
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(
-            logging.Formatter("{levelname:<5}| {message}", style="{")
-        )
-        # いちいちファイルに書き込むと遅いのでMemoryHandlerを使う
-        # logging.info(), logging.debug()などを呼んだ回数がcapacityを上回った場合、targetに出力される
-        # flushLevelは高めに設定
-        memory_handler = MemoryHandler(
-            capacity=100, flushLevel=logging.ERROR, target=file_handler
-        )
-        logger.addHandler(memory_handler)
-
-        logging.info(f"{desc} @ {dt_now.strftime('%Y/%m/%d %H:%M:%S')}")
-        logging.debug(f"Args: {sys.argv}")
-
-    @staticmethod
-    def log_elapsed_time(elapsed_sec: float) -> None:
-        m, s = divmod(elapsed_sec, 60)
-        h, m = divmod(m, 60)
-        logging.info(f"Elapsed time: {int(h):02d}:{int(m):02d}:{s:.1f}")
-
-    def log_parameters(self) -> None:
-        with decorate_print(logging.debug, "Parameter"):
-            for line in toml.dumps(self.params).splitlines():
-                logging.debug(line)
-
 
 if __name__ == "__main__":
     from model import BoidFlockers
@@ -174,4 +174,3 @@ if __name__ == "__main__":
     param_path = "./parameter/nominal.toml"
     runner = ModelRunner(BoidFlockers, param_path)
     runner.visualize()
-    runner.log_parameters()
