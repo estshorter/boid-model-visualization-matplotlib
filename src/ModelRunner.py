@@ -5,7 +5,7 @@ from logging.handlers import MemoryHandler
 from pathlib import Path
 import sys
 import time
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, MutableMapping
 
 from matplotlib.animation import Animation, FuncAnimation
 import matplotlib.pyplot as plt
@@ -60,7 +60,7 @@ def log_elapsed_time(elapsed_sec: float) -> None:
     logger.info(f"Elapsed time: {int(h):02d}:{int(m):02d}:{s:.1f}")
 
 
-def log_parameters(params) -> None:
+def log_parameters(params: MutableMapping[str, Any]) -> None:
     with decorate_print(logger.debug, "Parameter"):
         for line in toml.dumps(params).splitlines():
             logger.debug(line)
