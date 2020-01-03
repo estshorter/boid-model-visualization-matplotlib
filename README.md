@@ -11,7 +11,7 @@ A boid model is visualized by using matplotlib as shown above.
 - numpy
 - toml
 - tqdm
-
+- ffmpeg (when generating movie)
 
 ## How to use
 ```
