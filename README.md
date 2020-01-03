@@ -13,5 +13,8 @@ A boid model is visualized by using matplotlib as shown above.
 
 ## How to use
 ```
-python run.py
+python src/run.py
 ```
+
+if you want to create a movie file, `python src/generate_movie`.
+Note that `ffmpeg` is required.
