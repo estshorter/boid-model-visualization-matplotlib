@@ -1,16 +1,16 @@
 import contextlib
 import datetime
 import logging
-from logging.handlers import MemoryHandler
-from pathlib import Path
 import sys
 import time
+from logging.handlers import MemoryHandler
+from pathlib import Path
 from typing import Any, Callable, Iterator, MutableMapping
 
-from matplotlib.animation import Animation, FuncAnimation
 import matplotlib.pyplot as plt
-from mesa import Model
 import toml
+from matplotlib.animation import Animation, FuncAnimation
+from mesa import Model
 from tqdm import tqdm
 
 from TqdmLoggingHandler import TqdmLoggingHandler

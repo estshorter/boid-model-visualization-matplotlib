@@ -5,13 +5,12 @@ A Mesa implementation of Craig Reynolds's Boids flocker model.
 Uses numpy arrays to represent vectors.
 """
 
+import matplotlib.patches as patches
+import matplotlib.pyplot as plt
 import numpy as np
-
 from mesa import Model
 from mesa.space import ContinuousSpace
 from mesa.time import RandomActivation
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 
 from boid import Boid
 
